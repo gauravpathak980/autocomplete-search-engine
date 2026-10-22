@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Search suggestion engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F3FA;--sf:#fff;--ink:#1B1730;--mu:#615C78;--ln:#DAD6EA;--ac:#5233D6;--acs:#ECE8FB;--on:#fff;--warn:#C2410C;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12101F;--sf:#1B1830;--ink:#ECE9FA;--mu:#A29DBD;--ln:#2E2A4A;--ac:#9C86FF;--acs:#2A2550;--on:#140F2E;--warn:#FB923C;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12101F;--sf:#1B1830;--ink:#ECE9FA;--mu:#A29DBD;--ln:#2E2A4A;--ac:#9C86FF;--acs:#2A2550;--on:#140F2E;--warn:#FB923C;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.1;margin:0 0 6px;font-weight:800;letter-spacing:-.02em}
+h2{font-size:16px;margin:0 0 10px;font-weight:600}
+p{margin:0}.mu{color:var(--mu)}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:16px;margin-top:18px;align-items:start}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+section{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:16px;margin-bottom:16px}
+#q,#nt{width:100%;font:inherit;font-size:18px;color:var(--ink);background:var(--bg);border:2px solid var(--ln);border-radius:12px;padding:12px 14px}
+#q:focus{border-color:var(--ac);outline:none}
+#list{list-style:none;margin:8px 0 0;padding:6px;border:1px solid var(--ln);border-radius:12px;background:var(--sf)}
+#list[hidden]{display:none}
+#list li{padding:8px 10px;border-radius:8px;display:flex;gap:8px;align-items:baseline;cursor:pointer}
+#list li.act,#list li[role=option]:hover{background:var(--acs)}
+#list .t{flex:1;min-width:0;overflow-wrap:anywhere}
+#list .mt{color:var(--mu)}
+#list b{font-weight:600}
+#list em{font-style:normal;font-size:12px;color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:0 7px}
+#list small{color:var(--mu);font-size:12px}
+#list .grp{font-size:13px;color:var(--mu);cursor:default;padding:8px 10px 2px}
+#list .empty{color:var(--mu);cursor:default}
+.status{min-height:22px;margin-top:8px;color:var(--mu)}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.stat{border:1px solid var(--ln);border-radius:8px;padding:8px 10px}
+.stat small{display:block;color:var(--mu);font-size:12px}
+.stat span{font-weight:600;font-size:17px}
+.path{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.nd{text-align:center}
+.nd .ch{display:inline-block;min-width:30px;padding:3px 7px;border-radius:6px;background:var(--acs);color:var(--ink);font-weight:600}
+.nd small{display:block;font-size:12px;color:var(--mu)}
+.nd.bad .ch{background:transparent;border:1px dashed var(--warn);color:var(--warn)}
+.nd.bad small{color:var(--warn)}
+label{display:flex;gap:8px;align-items:center;margin:6px 0}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:4px 6px}
+input[type=checkbox]{accent-color:var(--ac);width:16px;height:16px}
+.btn{font:inherit;color:var(--on);background:var(--ac);border:0;border-radius:8px;padding:8px 14px;cursor:pointer;margin-top:8px}
+#nt{font-size:15px;padding:8px 10px;border-width:1px}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>Search suggestion engine</h1>
+<p class="mu">Type a search. Suggestions come from a trie, ranked by popularity, with typo-tolerant matching. The panel on the right shows what the engine did.</p>
+
+<div class="grid">
+<div>
+  <section>
+    <input id="q" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="list" aria-label="Search" placeholder="Try ‘jav’, ‘pyhton’ or ‘git’" autocomplete="off" spellcheck="false">
+    <ul id="list" role="listbox" aria-label="Suggestions" hidden></ul>
+    <p class="status" id="status" aria-live="polite"></p>
+  </section>
+  <section>
+    <h2>Add your own term</h2>
+    <input id="nt" type="text" aria-label="New search term" placeholder="e.g. rust ownership" autocomplete="off">
+    <button class="btn" id="add">Add to index</button>
+    <p class="status" id="am" aria-live="polite"></p>
+  </section>
+</div>
+<div>
+  <section>
+    <h2>Engine internals</h2>
+    <div class="stats">
+      <div class="stat"><small>Terms indexed</small><span id="sTerms"></span></div>
+      <div class="stat"><small>Trie nodes</small><span id="sNodes"></span></div>
+      <div class="stat"><small>Query time</small><span id="sTime"></span></div>
+      <div class="stat"><small>Matches found</small><span id="sMatch"></span></div>
+    </div>
+    <p style="margin-top:10px"><span class="mu">Match type:</span> <b id="sType"></b></p>
+    <h2 style="margin-top:14px">Path through the trie</h2>
+    <div class="path" id="path"></div>
+    <p class="mu" style="font-size:13px">Each box is a character. The number under it is how many branches continue from that point. A dashed box means no indexed term continues that way.</p>
+  </section>
+  <section>
+    <h2>Settings</h2>
+    <label>Suggestions shown <select id="k"><option>3</option><option selected>5</option><option>8</option></select></label>
+    <label><input type="checkbox" id="fz" checked> Suggest similar terms for typos</label>
+    <label><input type="checkbox" id="ln" checked> Learn from what I pick (+25 score)</label>
+  </section>
+</div>
+</div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm=s=>s.replace(/^\s+/,'').replace(/\s+/g,' ').toLowerCase();
+const RAW=`javascript tutorial:950,javascript array methods:700,javascript promises:640,javascript closures:520,java vs javascript:480,java tutorial:900,java interview questions:760,java streams:430,python tutorial:1000,python list comprehension:610,python pandas:720,python for beginners:680,python virtual environment:400,python flask:380,python vs java:450,react tutorial:880,react hooks:790,react useeffect:640,react router:560,react vs vue:420,react native:610,react context api:350,node js tutorial:700,node js express:620,typescript tutorial:560,typescript generics:340,typescript vs javascript:480,git commands:850,git merge vs rebase:520,git undo last commit:600,git stash:430,github pages:640,github actions:520,docker tutorial:760,docker compose:640,docker vs kubernetes:480,kubernetes tutorial:690,sql tutorial:820,sql joins:880,sql injection:540,sql vs nosql:500,mongodb tutorial:520,mongodb atlas:300,machine learning:1000,machine learning projects:720,machine learning roadmap:460,machine learning vs deep learning:420,deep learning:850,data structures and algorithms:900,data structures in python:480,dynamic programming:700,binary search:640,binary tree traversal:480,linked list:620,hash table:500,trie data structure:360,sorting algorithms:760,cpu scheduling algorithms:380,operating system concepts:420,computer networks:560,css flexbox:780,css grid:740,css animations:450,html tutorial:700,html forms:420,tailwind css:650,bootstrap tutorial:430,web development roadmap:690,full stack developer:600,rest api design:560,graphql vs rest:430,system design interview:880,design patterns:620,clean code:500,leetcode solutions:800,linux commands:830,bash scripting:450,vs code shortcuts:610,vs code extensions:560,cloud computing:640,aws free tier:520,azure fundamentals:400,firebase authentication:420,jwt authentication:560`;
+
+/* Trie: each node maps a character to a child; a node that ends a term holds its entry. */
+class Node{constructor(){this.c=new Map();this.t=null}}
+const root=new Node(),terms=new Map();let nodes=1;
+function insert(s,f){
+ if(!s||terms.has(s))return false;
+ let n=root;
+ for(const ch of s){let m=n.c.get(ch);if(!m){m=new Node();n.c.set(ch,m);nodes++}n=m}
+ n.t={s,f};terms.set(s,n.t);return true;
+}
+function collect(n,out){const st=[n];while(st.length){const x=st.pop();if(x.t)out.push(x.t);for(const m of x.c.values())st.push(m)}}
+function prefixSearch(q){let n=root;for(const ch of q){n=n.c.get(ch);if(!n)return[]}const o=[];collect(n,o);return o}
+/* Fuzzy: walk the trie keeping one Levenshtein row per node; prune branches that exceed the edit budget. */
+function fuzzy(q){
+ const max=q.length>=6?2:1,res=new Map();
+ (function walk(n,ch,prev){
+  let row=prev;
+  if(ch!==null){row=[prev[0]+1];for(let i=1;i<=q.length;i++)row[i]=Math.min(row[i-1]+1,prev[i]+1,prev[i-1]+(q[i-1]===ch?0:1))}
+  if(Math.min(...row)>max)return;
+  if(ch!==null&&row[q.length]<=max){const o=[];collect(n,o);o.forEach(e=>{if(!res.has(e)||res.get(e)>row[q.length])res.set(e,row[q.length])});return}
+  for(const[c,m]of n.c)walk(m,c,row);
+ })(root,null,Array.from({length:q.length+1},(_,i)=>i));
+ return res;
+}
+RAW.split(',').forEach(x=>{const i=x.lastIndexOf(':');insert(x.slice(0,i),+x.slice(i+1))});
+
+let K=5,fz=true,learn=true,recent=[],items=[],act=-1,open=false,info={q:'',ms:0,total:0,type:''};
+const byF=(a,b)=>b.f-a.f||(a.s<b.s?-1:1);
+
+function run(){
+ const q=norm($('#q').value),t0=performance.now();
+ let list=[],total=0,type='';
+ if(!q){
+  const rec=recent.map(s=>({e:terms.get(s)||{s,f:null},src:'recent'}));
+  const pop=[...terms.values()].filter(e=>!recent.includes(e.s)).sort(byF).slice(0,K).map(e=>({e,src:'popular'}));
+  list=rec.concat(pop);total=terms.size;type='popular searches';
+ }else{
+  const p=prefixSearch(q).sort(byF);total=p.length;
+  list=p.slice(0,K).map(e=>({e,src:'prefix'}));type=p.length?'prefix':'';
+  if(fz&&q.length>=3&&list.length<K){
+   const seen=new Set(p),fl=[...fuzzy(q)].filter(([e])=>!seen.has(e)).sort((a,b)=>a[1]-b[1]||b[0].f-a[0].f);
+   total+=fl.length;
+   fl.slice(0,K-list.length).forEach(([e,d])=>list.push({e,src:'similar'}));
+   if(fl.length)type=p.length?'prefix + similar':'similar (typo tolerance)';
+  }
+ }
+ info={q,ms:performance.now()-t0,total,type:type||'no match'};
+ items=list;act=-1;renderList();renderInfo();
+}
+function renderList(){
+ const L=$('#list'),q=info.q;let h='',last='';
+ if(!items.length&&q)h=`<li class="empty" role="presentation">No suggestions for ‘${esc(q)}’. Press Enter to search for it anyway.</li>`;
+ items.forEach((it,i)=>{
+  if(!q&&it.src!==last){h+=`<li class="grp" role="presentation">${it.src==='recent'?'Recent searches':'Popular searches'}</li>`;last=it.src}
+  const s=it.e.s,m=it.src==='prefix'?q.length:0;
+  h+=`<li role="option" id="o${i}" data-i="${i}" aria-selected="${i===act}" class="${i===act?'act':''}"><span class="t"><span class="mt">${esc(s.slice(0,m))}</span><b>${esc(s.slice(m))}</b></span>${it.src==='similar'?'<em>similar</em>':''}${it.e.f!=null&&it.src!=='recent'?`<small>${it.e.f}</small>`:''}</li>`;
+ });
+ L.innerHTML=h;
+ const show=open&&(items.length>0||!!q);
+ L.hidden=!show;
+ const inp=$('#q');inp.setAttribute('aria-expanded',String(show));
+ act>=0?inp.setAttribute('aria-activedescendant','o'+act):inp.removeAttribute('aria-activedescendant');
+}
+function renderInfo(){
+ $('#sTerms').textContent=terms.size;$('#sNodes').textContent=nodes;
+ $('#sTime').textContent=info.ms<0.01?'<0.01 ms':info.ms.toFixed(2)+' ms';
+ $('#sMatch').textContent=info.total;$('#sType').textContent=info.type;
+ let n=root,ok=true,h=`<div class="nd"><span class="ch">root</span><small>${root.c.size}</small></div>`;
+ for(const ch of[...info.q].slice(0,16)){
+  if(ok){n=n.c.get(ch);if(!n)ok=false}
+  const c=esc(ch===' '?'␣':ch);
+  h+=ok?`<div class="nd"><span class="ch">${c}</span><small>${n.c.size}</small></div>`:`<div class="nd bad"><span class="ch">${c}</span><small>✕</small></div>`;
+ }
+ if([...info.q].length>16)h+='<div class="nd"><span class="ch">…</span></div>';
+ $('#path').innerHTML=h;
+}
+function pick(s){
+ const e=terms.get(s);if(e&&learn)e.f+=25;
+ recent=[s,...recent.filter(x=>x!==s)].slice(0,5);
+ $('#q').value=s;open=false;run();
+ $('#status').textContent=`Searched for ‘${s}’.`+(e&&learn?` Its score rose to ${e.f}.`:'');
+}
+const inp=$('#q');
+inp.addEventListener('input',()=>{open=true;$('#status').textContent='';run()});
+inp.addEventListener('focus',()=>{open=true;run()});
+inp.addEventListener('blur',()=>{open=false;renderList()});
+inp.addEventListener('keydown',e=>{
+ const n=items.length;
+ if(e.key==='ArrowDown'&&n){e.preventDefault();open=true;act=(act+1)%n;renderList()}
+ else if(e.key==='ArrowUp'&&n){e.preventDefault();open=true;act=act<=0?n-1:act-1;renderList()}
+ else if(e.key==='Enter'){e.preventDefault();if(act>=0)pick(items[act].e.s);else if(norm(inp.value).trim())pick(norm(inp.value).trim())}
+ else if(e.key==='Escape'){open=false;act=-1;renderList()}
+});
+$('#list').addEventListener('mousedown',e=>e.preventDefault());
+$('#list').addEventListener('click',e=>{const li=e.target.closest('li[data-i]');if(li)pick(items[+li.dataset.i].e.s)});
+$('#k').onchange=e=>{K=+e.target.value;run()};
+$('#fz').onchange=e=>{fz=e.target.checked;run()};
+$('#ln').onchange=e=>{learn=e.target.checked};
+function addTerm(){
+ const s=norm($('#nt').value).trim(),m=$('#am');
+ if(s.length<2){m.textContent='Enter a term with at least 2 characters.';return}
+ if(terms.has(s)){m.textContent=`‘${s}’ is already in the index.`;return}
+ insert(s,50);m.textContent=`Added ‘${s}’ with a starting score of 50.`;$('#nt').value='';run();
+}
+$('#add').onclick=addTerm;
+$('#nt').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addTerm()}});
+run();
+</script>
+</body>
+</html>
